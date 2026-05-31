@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>普信债流动性数据 · 可视化仪表盘</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="data.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Microsoft YaHei',sans-serif;background:#0f1923;color:#e0e0e0;min-height:100vh}
+.header{background:linear-gradient(135deg,#1a3a4a 0%,#0f1923 100%);padding:20px 32px;border-bottom:2px solid #2a5a7a;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+.header h1{font-size:22px;color:#4fc3f7;margin-bottom:2px}
+.header p{font-size:12px;color:#78909c}
+.nav{display:flex;gap:4px;padding:10px 32px;background:#162432;border-bottom:1px solid #1e3a4a;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+.nav button{padding:8px 18px;border:1px solid #2a4a5a;background:transparent;color:#90a4ae;cursor:pointer;border-radius:4px;font-size:13px;transition:all 0.2s;font-family:inherit}
+.nav button:hover{background:#1a3a4a;color:#e0e0e0}
+.nav button.active{background:#1a5a7a;border-color:#4fc3f7;color:#4fc3f7;font-weight:600}
+.dashboard{max-width:1600px;margin:0 auto;padding:20px}
+.section{display:none}
+.section.active{display:block}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.row.full{grid-template-columns:1fr}
+.row.triple{grid-template-columns:1fr 1fr 1fr}
+.card{background:#162432;border:1px solid #1e3a4a;border-radius:8px;padding:14px}
+.card h2{font-size:14px;color:#4fc3f7;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #1e3a4a;font-weight:500}
+.chart{width:100%;height:400px}
+.chart-tall{width:100%;height:500px}
+.chart-short{width:100%;height:320px}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.kpi{background:#162432;border:1px solid #1e3a4a;border-radius:8px;padding:14px 18px;transition:border-color 0.3s}
+.kpi:hover{border-color:#4fc3f7}
+.kpi .label{font-size:11px;color:#78909c;margin-bottom:4px}
+.kpi .value{font-size:22px;font-weight:700;color:#4fc3f7}
+.kpi .sub{font-size:10px;color:#66bb6a;margin-top:2px}
+.kpi.warn .value{color:#ffa726}
+.kpi.down .sub{color:#ef5350}
+.range-selector{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.range-selector button{padding:4px 12px;border:1px solid #2a4a5a;background:transparent;color:#90a4ae;cursor:pointer;border-radius:3px;font-size:11px;font-family:inherit;transition:all 0.2s}
+.range-selector button:hover{background:#1a3a4a}
+.range-selector button.active{background:#1a5a7a;border-color:#4fc3f7;color:#4fc3f7}
+/* Data table */
+.data-table-wrap{margin-top:16px;max-height:520px;overflow:auto;border:1px solid #1e3a4a;border-radius:6px}
+.data-table-wrap h3{font-size:13px;color:#90a4ae;padding:10px 14px;background:#1a2e3a;border-bottom:1px solid #1e3a4a;position:sticky;top:0;z-index:2;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.data-table-wrap h3 .toggle{font-size:11px;color:#78909c}
+.data-table-wrap table{width:100%;border-collapse:collapse;font-size:11px}
+.data-table-wrap thead th{background:#1a2e3a;color:#90a4ae;padding:8px 10px;text-align:right;border-bottom:2px solid #2a4a5a;position:sticky;top:36px;z-index:1;white-space:nowrap;font-weight:500}
+.data-table-wrap thead th:first-child{text-align:center}
+.data-table-wrap tbody td{padding:6px 10px;text-align:right;border-bottom:1px solid #1a2e3a;white-space:nowrap;color:#b0bec5}
+.data-table-wrap tbody td:first-child{text-align:center;color:#78909c}
+.data-table-wrap tbody tr:hover td{background:#1a2e3a}
+.data-table-wrap tbody td.num{color:#4fc3f7;font-variant-numeric:tabular-nums}
+.data-table-wrap.collapsed table,.data-table-wrap.collapsed thead{display:none}
+@media(max-width:900px){.row,.row.triple{grid-template-columns:1fr}.kpi-row{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<div class="header">
+<div>
+<h1>📊 普信债流动性数据 · 可视化仪表盘</h1>
+<p>数据区间：2020-01 ~ 2026-05 | 来源：CFETS</p>
+</div>
+</div>
+
+<div class="nav">
+<button class="active" onclick="showTab('overview',this)">📋 总览</button>
+<button onclick="showTab('tkn',this)">📈 TKN统计</button>
+<button onclick="showTab('institution',this)">🏦 机构成交</button>
+<button onclick="showTab('turnover',this)">🔄 换手率</button>
+</div>
+
+<div class="dashboard">
+
+<!-- ====== OVERVIEW ====== -->
+<div id="tab-overview" class="section active">
+<div class="kpi-row" id="kpi-cards"></div>
+<div class="row">
+<div class="card"><h2>📊 TKN vs GVN 成交量趋势（近60周）</h2><div id="c-ov-tkn" class="chart"></div></div>
+<div class="card"><h2>🔄 换手率走势（近120日）</h2><div id="c-ov-turnover" class="chart"></div></div>
+</div>
+<div class="row">
+<div class="card"><h2>📈 TKN占比 & 成交平均收益率</h2><div id="c-ov-yield" class="chart"></div></div>
+<div class="card"><h2>📉 平均偏离(bp) & 收益率中位数</h2><div id="c-ov-dev" class="chart"></div></div>
+</div>
+</div>
+
+<!-- ====== TKN ====== -->
+<div id="tab-tkn" class="section">
+<div class="range-selector" id="tkn-range">
+<button onclick="renderTKN(9999,this)" class="active">全部</button>
+<button onclick="renderTKN(52,this)">近1年</button>
+<button onclick="renderTKN(104,this)">近2年</button>
+<button onclick="renderTKN(156,this)">近3年</button>
+</div>
+<div class="row">
+<div class="card"><h2>📊 成交量：成交总数 / TKN / GVN</h2><div id="c-tkn-bar" class="chart"></div></div>
+<div class="card"><h2>📈 TKN占比(%) 趋势</h2><div id="c-tkn-ratio" class="chart"></div></div>
+</div>
+<div class="row">
+<div class="card"><h2>📈 平均成交收益率 & 收益率中位数 (%)</h2><div id="c-tkn-yield" class="chart"></div></div>
+<div class="card"><h2>📉 平均偏离 & 中位数偏离 (bp)</h2><div id="c-tkn-dev" class="chart"></div></div>
+</div>
+<div class="row">
+<div class="card"><h2>⏳ 平均剩余期限 (年)</h2><div id="c-tkn-term" class="chart"></div></div>
+<div class="card"><h2>📝 成交笔数 & 成交债券数</h2><div id="c-tkn-count" class="chart"></div></div>
+</div>
+<div class="data-table-wrap" id="tkn-table-wrap"></div>
+</div>
+
+<!-- ====== INSTITUTION ====== -->
+<div id="tab-institution" class="section">
+<div class="range-selector" id="inst-range">
+<button onclick="renderInst(9999,this)" class="active">全部</button>
+<button onclick="renderInst(52,this)">近1年</button>
+<button onclick="renderInst(104,this)">近2年</button>
+<button onclick="renderInst(156,this)">近3年</button>
+</div>
+<div class="row">
+<div class="card"><h2>🏦 券商 vs 保险 成交量趋势</h2><div id="c-inst-vol" class="chart-tall"></div></div>
+<div class="card"><h2>📊 券商各期限成交量</h2><div id="c-inst-broker-term" class="chart-tall"></div></div>
+</div>
+<div class="row">
+<div class="card"><h2>📊 保险各期限成交量</h2><div id="c-inst-ins-term" class="chart-tall"></div></div>
+<div class="card"><h2>📊 券商 vs 保险 成交量占比（期限堆叠）</h2><div id="c-inst-stack" class="chart-tall"></div></div>
+</div>
+<div class="data-table-wrap" id="inst-table-wrap"></div>
+</div>
+
+<!-- ====== TURNOVER ====== -->
+<div id="tab-turnover" class="section">
+<div class="range-selector" id="to-range">
+<button onclick="renderTurnover(9999,this)" class="active">全部</button>
+<button onclick="renderTurnover(252,this)">近1年</button>
+<button onclick="renderTurnover(504,this)">近2年</button>
+<button onclick="renderTurnover(756,this)">近3年</button>
+</div>
+<div class="row">
+<div class="card"><h2>🔄 换手率 日度走势</h2><div id="c-to-rate" class="chart-tall"></div></div>
+<div class="card"><h2>🏢 经纪商换手率 日度走势</h2><div id="c-to-broker" class="chart-tall"></div></div>
+</div>
+<div class="row full">
+<div class="card"><h2>📊 换手率 vs 经纪商换手率 对比</h2><div id="c-to-compare" class="chart-tall"></div></div>
+</div>
+<div class="data-table-wrap" id="to-table-wrap"></div>
+</div>
+
+</div><!-- /dashboard -->
+
+<script>
+// ===== UTILS =====
+const C = {
+  blue: '#4fc3f7', green: '#66bb6a', orange: '#ffa726', red: '#ef5350',
+  purple: '#ab47bc', cyan: '#26c6da', yellow: '#ffee58', pink: '#ec407a',
+};
+
+// Grid: large bottom for rotated x-axis labels; legend goes on TOP to avoid overlap
+const gridTop = { left:65, right:25, top:40, bottom:55 };
+const gridTopDual = { left:65, right:70, top:40, bottom:55 };
+const gridTall = { left:70, right:25, top:40, bottom:55 };
+const xStyle = { axisLabel:{color:'#78909c',rotate:30,fontSize:10}, axisLine:{lineStyle:{color:'#2a4a5a'}} };
+const yStyle = { axisLabel:{color:'#78909c'}, splitLine:{lineStyle:{color:'#1e3a4a'}} };
+// Legend at top to prevent overlap with x-axis date labels
+const legendTop = { top:5, textStyle:{color:'#90a4ae',fontSize:11} };
+const legendTopSm = { top:5, textStyle:{color:'#90a4ae',fontSize:10} };
+
+const chartInst = {};
+function initChart(id) {
+  const el = document.getElementById(id);
+  if (!el || el.clientWidth===0) return null;
+  if (chartInst[id]) chartInst[id].dispose();
+  const c = echarts.init(el);
+  chartInst[id] = c;
+  return c;
+}
+function resizeAll() {
+  Object.values(chartInst).forEach(c => { try { c.resize(); } catch(e){} });
+}
+
+// ===== NAVIGATION =====
+function showTab(name, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  currentTab = name;
+  setTimeout(() => { renderTab(name); resizeAll(); }, 80);
+}
+window.addEventListener('resize', () => setTimeout(resizeAll, 150));
+
+// ===== KPI =====
+function renderKPI() {
+  const last = DATA1[DATA1.length-1];
+  const prev = DATA1[DATA1.length-2];
+  const l4 = DATA4[DATA4.length-1];
+  const p4 = DATA4[DATA4.length-2];
+  const cards = [
+    {label:'最新TKN占比', v:(last.tkn_ratio*100).toFixed(1)+'%', s:prev?'上周 '+(prev.tkn_ratio*100).toFixed(1)+'%':'', w:last.tkn_ratio<0.5},
+    {label:'TKN成交数量', v:last.tkn_count||'-', s:prev?'上周 '+prev.tkn_count:'', w:false},
+    {label:'平均成交收益率', v:last.avg_yield?last.avg_yield.toFixed(2)+'%':'-', s:prev?prev.avg_yield.toFixed(2)+'%':'', w:false},
+    {label:'最新换手率', v:l4?(l4.turnover_rate*100).toFixed(3)+'%':'-', s:p4?(p4.turnover_rate*100).toFixed(3)+'%':'', w:false},
+  ];
+  document.getElementById('kpi-cards').innerHTML = cards.map(c =>
+    '<div class="kpi'+(c.w?' warn':'')+'"><div class="label">'+c.label+'</div><div class="value">'+c.v+'</div><div class="sub">'+c.s+'</div></div>'
+  ).join('');
+}
+
+// ===== FORMAT HELPERS =====
+function fmtNum(v, dec) {
+  if (v == null || isNaN(v)) return '-';
+  if (dec === undefined) dec = v > 100 ? 0 : v > 1 ? 1 : 4;
+  return Number(v).toFixed(dec);
+}
+function fmtPct(v) { return v != null ? (v*100).toFixed(2)+'%' : '-'; }
+
+// ===== DATA TABLE BUILDER =====
+function buildTable(containerId, data, columns, title) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const rows = data.slice(-20).reverse();
+  let html = '<h3 onclick="this.parentElement.classList.toggle(\'collapsed\')">'+title+' <span class="toggle">点击展开/折叠</span></h3>';
+  html += '<table><thead><tr>';
+  columns.forEach(c => { html += '<th>'+c.label+'</th>'; });
+  html += '</tr></thead><tbody>';
+  rows.forEach(r => {
+    html += '<tr>';
+    columns.forEach(c => {
+      const v = r[c.key];
+      const cls = typeof v === 'number' ? ' class="num"' : '';
+      html += '<td'+cls+'>'+(c.fmt ? c.fmt(v) : (v != null ? v : '-'))+'</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// ===== OVERVIEW =====
+function renderOverview() {
+  const d60 = DATA1.slice(-60);
+  const c1 = initChart('c-ov-tkn');
+  if(c1) c1.setOption({
+    tooltip:{trigger:'axis'},
+    legend:legendTop,
+    grid:gridTop,
+    xAxis:{type:'category',data:d60.map(r=>r.date),...xStyle},
+    yAxis:{type:'value',...yStyle},
+    series:[
+      {name:'成交数量',type:'bar',data:d60.map(r=>r.trade_count),itemStyle:{color:C.blue,opacity:0.7}},
+      {name:'TKN数量',type:'bar',data:d60.map(r=>r.tkn_count),itemStyle:{color:C.green}},
+      {name:'GVN数量',type:'bar',data:d60.map(r=>r.gvn_count),itemStyle:{color:C.red}},
+    ]
+  });
+
+  const d120 = DATA4.slice(-120);
+  const c2 = initChart('c-ov-turnover');
+  if(c2) c2.setOption({
+    tooltip:{trigger:'axis'},
+    legend:legendTop,
+    grid:gridTop,
+    xAxis:{type:'category',data:d120.map(r=>r.date),...xStyle},
+    yAxis:{type:'value',axisLabel:{color:'#78909c',formatter:v=>(v*100).toFixed(2)+'%'},splitLine:{lineStyle:{color:'#1e3a4a'}}},
+    series:[
+      {name:'换手率',type:'line',data:d120.map(r=>r.turnover_rate),itemStyle:{color:C.blue},lineStyle:{width:1.5},symbol:'none',smooth:true},
+      {name:'经纪商换手率',type:'line',data:d120.map(r=>r.broker_turnover_rate),itemStyle:{color:C.green},lineStyle:{width:1.5},symbol:'none',smooth:true},
+    ]
+  });
+
+  const d80 = DATA1.slice(-80);
+  const c3 = initChart('c-ov-yield');
+  if(c3) c3.setOption({
+    tooltip:{trigger:'axis'},
+    legend:legendTop,
+    grid:gridTopDual,
+    xAxis:{type:'category',data:d80.map(r=>r.date),...xStyle},
+    yAxis:[
+      {type:'value',name:'收益率(%)',nameTextStyle:{color:'#78909c'},...yStyle},
+      {type:'value',name:'TKN占比',nameTextStyle:{color:'#78909c'},axisLabel:{color:'#78909c',formatter:v=>(v*100).toFixed(0)+'%'},splitLine:{show:false}},
+    ],
+    series:[
+      {name:'平均成交收益率(%)',type:'line',data:d80.map(r=>r.avg_yield),itemStyle:{color:C.orange},lineStyle:{width:2},symbol:'none',smooth:true},
+      {name:'TKN占比',type:'line',yAxisIndex:1,data:d80.map(r=>r.tkn_ratio),itemStyle:{color:C.blue},lineStyle:{width:2},symbol:'none',smooth:true,areaStyle:{color:'rgba(79,195,247,0.08)'}},
+    ]
+  });
+
+  const c4 = initChart('c-ov-dev');
+  if(c4) c4.setOption({
+    tooltip:{trigger:'axis'},
+    legend:legendTop,
+    grid:gridTopDual,
+    xAxis:{type:'category',data:d80.map(r=>r.date),...xStyle},
+    yAxis:[
+      {type:'value',name:'bp',nameTextStyle:{color:'#78909c'},...yStyle},
+      {type:'value',name:'收益率(%)',nameTextStyle:{color:'#78909c'},axisLabel:{color:'#78909c'},splitLine:{show:false}},
+    ],
+    series:[
+      {name:'平均偏离(bp)',type:'bar',data:d80.map(r=>r.avg_deviation_bp),itemStyle:{color:C.blue,opacity:0.7}},
+      {name:'中位数偏离(bp)',type:'bar',data:d80.map(r=>r.median_deviation_bp),itemStyle:{color:C.orange,opacity:0.7}},
+      {name:'收益率中位数(%)',type:'line',yAxisIndex:1,data:d80.map(r=>r.median_yield),itemStyle:{color:C.green},lineStyle:{width:2},symbol:'none',smooth:true},
+    ]
+  });
+}
+
+// ===== TKN =====
+let tknN = 9999;
+function renderTKN(n, btn) {
+  tknN = n;
+  if (btn) { btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
+  const d = DATA1.slice(-n);
+  const dates = d.map(r=>r.date);
+
+  const c1 = initChart('c-tkn-bar');
+  if(c1) c1.setOption({
+    tooltip:{trigger:'axis'}, legend:legendTop, grid:gridTop,
+    xAxis:{type:'category',data:dates,...xStyle}, yAxis:{type:'value',...yStyle},
+    series:[
+      {name:'成交数量',type:'bar',data:d.map(r=>r.trade_count),itemStyle:{color:C.blue,opacity:0.6}},
+      {name:'TKN数量',type:'bar',data:d.map(r=>r.tkn_count),itemStyle:{color:C.green}},
+      {name:'GVN数量',type:'bar',data:d.map(r=>r.gvn_count),itemStyle:{color:C.red}},
+    ]
+  });
+
+  const c2 = initChart('c-tkn-ratio');
+  if(c2) c2.setOption({
+    tooltip:{trigger:'axis'}, legend:legendTop, grid:gridTop,
+    xAxis:{type:'category',data:dates,...xStyle},
+    yAxis:{type:'value',axisLabel:{color:'#78909c',formatter:v=>(v*100).toFixed(0)+'%'},splitLine:{lineStyle:{color:'#1e3a4a'}}},
+    series:[{
+      name:'TKN占比(%)',type:'line',data:d.map(r=>r.tkn_ratio),itemStyle:{color:C.blue},lineStyle:{width:2},symbol:'none',smooth:true,
+      areaStyle:{color:'rgba(79,195,247,0.12)'},
+      markLine:{data:[{yAxis:0.5,label:{formatter:'50%'},lineStyle:{color:'#ffa726',type:'dashed'}}],silent:true}
+    }]
+  });
+
+  const c3 = initChart('c-tkn-yield');
+  if(c3) c3.setOption({
+    tooltip:{trigger:'axis'}, legend:legendTop, grid:gridTop,
+    xAxis:{type:'category',data:dates,...xStyle},
+    yAxis:{type:'value',axisLabel:{color:'#78909c',formatter:'{value}%'},...yStyle},
+    series:[
+      {name:'平均成交收益率(%)',type:'line',data:d.map(r=>r.avg_yield),itemStyle:{color:C.orange},lineStyle:{width:2},symbol:'none',smooth:true},
+      {name:'收益率中位数(%)',type:'line',data:d.map(r=>r.median_yield),itemStyle:{color:C.green},lineStyle:{width:2},symbol:'none',smooth:true},
+    ]
+  });
+
+  const c4 = initChart('c-tkn-dev');
+  if(c4) c4.setOption({
+    tooltip:{trigger:'axis'}, legend:legendTop, grid:gridTop,
+    xAxis:{type:'category',data:dates,...xStyle},
+    yAxis:{type:'value',axisLabel:{color:'#78909c',formatter:'{value}bp'},...yStyle},
+    series:[
+      {name:'平均偏离(bp)',type:'bar',data:d.map(r=>r.avg_deviation_bp),itemStyle:{color:C.blue,opacity:0.7}},
+      {name:'中位数偏离(bp)',type:'bar',data:d.map(r=>r.median_deviation_bp),itemStyle:{color:C.orange,opacity:0.7}},
+    ]
+  });
+
+  const c5 = initChart('c-tkn-term');
+  if(c5) c5.setOption({
+    tooltip:{trigger:'axis'}, grid:gridTop,
+    xAxis:{type:'category',data:dates,...xStyle},
+    yAxis:{type:'value',name:'年',nameTextStyle:{color:'#78909c'},...yStyle},
+    series:[{
+      name:'平均剩余期限',type:'line',data:d.map(r=>r.avg_remaining_years),itemStyle:{color:C.purple},lineStyle:{width:2},symbol:'none',smooth:true,
+      areaStyle:{color:'rgba(171,71,188,0.08)'}
+    }]
+  });
+
+  const c6 = initChart('c-tkn-count');
+  if(c6) c6.setOption({
+    tooltip:{trigger:'axis'}, legend:legendTop, grid:gridTop,
+    xAxis:{type:'category',data:dates,...xStyle}, yAxis:{type:'value',...yStyle},
+    series:[
+      {name:'成交笔数',type:'line',data:d.map(r=>r.trade_num),itemStyle:{color:C.blue},lineStyle:{width:1.5},symbol:'none',smooth:true},
+      {name:'成交债券数',type:'line',data:d.map(r=>r.bond_count),itemStyle:{color:C.cyan},lineStyle:{width:1.5},symbol:'none',smooth:true},
+    ]
+  });
+
+  // Data table
+  buildTable('tkn-table-wrap', DATA1, [
+    {key:'date',label:'日期'},
+    {key:'tkn_count',label:'TKN数量',fmt:v=>fmtNum(v,0)},
+    {key:'gvn_count',label:'GVN数量',fmt:v=>fmtNum(v,0)},
+    {key:'trade_count',label:'成交数量',fmt:v=>fmtNum(v,0)},
+    {key:'tkn_ratio',label:'TKN占比',fmt:fmtPct},
+    {key:'avg_yield',label:'平均收益率(%)',fmt:v=>fmtNum(v,2)},
+    {key:'avg_deviation_bp',label:'平均偏离(bp)',fmt:v=>fmtNum(v,1)},
+    {key:'median_yield',label:'中位数收益率(%)',fmt:v=>fmtNum(v,2)},
+    {key:'median_deviation_bp',label:'中位数偏离(bp)',fmt:v=>fmtNum(v,1)},
+    {key:'avg_remaining_years',label:'平均剩余期限(年)',fmt:v=>fmtNum(v,2)},
+    {key:'trade_num',label:'成交笔数',fmt:v=>fmtNum(v,0)},
+    {key:'bond_count',label:'成交债券数',fmt:v=>fmtNum(v,0)},
+  ], '📋 TKN统计 — 最近20周数据');
+}
+
+// ===== INSTITUTION =====
+let instN = 9999;
+function renderInst(n, btn) {
+  instN = n;
+  if (btn) { btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
+  const d = DATA2.slice(-n);
+  const dates = d.map(r=>r.date);
+
+  const c1 = initChart('c-inst-vol');
+  if(c1) c1.setOption({
+    tooltip:{trigger:'axis'}, legend:legendTopSm, grid:gridTall,
+    xAxis:{type:'category',data:dates,...xStyle}, yAxis:{type:'value',...yStyle},
+    series:[
+      {name:'券商成交量',type:'line',data:d.map(r=>r.broker_vol_total),itemStyle:{color:C.blue},lineStyle:{width:1.5},symbol:'none',smooth:true,areaStyle:{color:'rgba(79,195,247,0.08)'}},
+      {name:'保险成交量',type:'line',data:d.map(r=>r.insurance_vol_total),itemStyle:{color:C.orange},lineStyle:{width:1.5},symbol:'none',smooth:true,areaStyle:{color:'rgba(255,167,38,0.08)'}},
+    ]
+  });
+
+  const c2 = initChart('c-inst-broker-term');
+  if(c2) c2.setOption({
+    tooltip:{trigger:'axis'}, legend:legendTopSm, grid:gridTall,
+    xAxis:{type:'category',data:dates,...xStyle}, yAxis:{type:'value',...yStyle},
+    series:[
+      {name:'券商(0-1年)',type:'line',data:d.map(r=>r.broker_vol_0_1),itemStyle:{color:'#bbdefb'},lineStyle:{width:1},symbol:'none',smooth:true},
+      {name:'券商(1-3年)',type:'line',data:d.map(r=>r.broker_vol_1_3),itemStyle:{color:'#64b5f6'},lineStyle:{width:1},symbol:'none',smooth:true},
+      {name:'券商(3-5年)',type:'line',data:d.map(r=>r.broker_vol_3_5),itemStyle:{color:'#1e88e5'},lineStyle:{width:1},symbol:'none',smooth:true},
+      {name:'券商(5-7年)',type:'line',data:d.map(r=>r.broker_vol_5_7),itemStyle:{color:'#0d47a1'},lineStyle:{width:1},symbol:'none',smooth:true},
+    ]
+  });
+
+  const c3 = initChart('c-inst-ins-term');
+  if(c3) c3.setOption({
+    tooltip:{trigger:'axis'}, legend:legendTopSm, grid:gridTall,
+    xAxis:{type:'category',data:dates,...xStyle}, yAxis:{type:'value',...yStyle},
+    series:[
+      {name:'保险(0-1年)',type:'line',data:d.map(r=>r.insurance_vol_0_1),itemStyle:{color:'#ffe0b2'},lineStyle:{width:1},symbol:'none',smooth:true},
+      {name:'保险(1-3年)',type:'line',data:d.map(r=>r.insurance_vol_1_3),itemStyle:{color:'#ffb74d'},lineStyle:{width:1},symbol:'none',smooth:true},
+      {name:'保险(3-5年)',type:'line',data:d.map(r=>r.insurance_vol_3_5),itemStyle:{color:'#f57c00'},lineStyle:{width:1},symbol:'none',smooth:true},
+      {name:'保险(5-7年)',type:'line',data:d.map(r=>r.insurance_vol_5_7),itemStyle:{color:'#e65100'},lineStyle:{width:1},symbol:'none',smooth:true},
+    ]
+  });
+
+  const c4 = initChart('c-inst-stack');
+  if(c4) c4.setOption({
+    tooltip:{trigger:'axis'}, legend:legendTopSm, grid:gridTall,
+    xAxis:{type:'category',data:dates,...xStyle}, yAxis:{type:'value',...yStyle},
+    series:[
+      {name:'券商(0-1年)',type:'line',stack:'broker',data:d.map(r=>r.broker_vol_0_1),itemStyle:{color:'#bbdefb'},lineStyle:{width:1},symbol:'none',smooth:true,areaStyle:{}},
+      {name:'券商(1-3年)',type:'line',stack:'broker',data:d.map(r=>r.broker_vol_1_3),itemStyle:{color:'#42a5f5'},lineStyle:{width:1},symbol:'none',smooth:true,areaStyle:{}},
+      {name:'券商(3-5年)',type:'line',stack:'broker',data:d.map(r=>r.broker_vol_3_5),itemStyle:{color:'#1e88e5'},lineStyle:{width:1},symbol:'none',smooth:true,areaStyle:{}},
+      {name:'保险(0-1年)',type:'line',stack:'insurance',data:d.map(r=>r.insurance_vol_0_1),itemStyle:{color:'#ffe0b2'},lineStyle:{width:1},symbol:'none',smooth:true,areaStyle:{}},
+      {name:'保险(1-3年)',type:'line',stack:'insurance',data:d.map(r=>r.insurance_vol_1_3),itemStyle:{color:'#ff9800'},lineStyle:{width:1},symbol:'none',smooth:true,areaStyle:{}},
+      {name:'保险(3-5年)',type:'line',stack:'insurance',data:d.map(r=>r.insurance_vol_3_5),itemStyle:{color:'#e65100'},lineStyle:{width:1},symbol:'none',smooth:true,areaStyle:{}},
+    ]
+  });
+
+  // Data table
+  buildTable('inst-table-wrap', DATA2, [
+    {key:'date',label:'日期'},
+    {key:'broker_vol_total',label:'券商总成交量',fmt:v=>fmtNum(v,1)},
+    {key:'broker_vol_0_1',label:'券商(0-1年)',fmt:v=>fmtNum(v,1)},
+    {key:'broker_vol_1_3',label:'券商(1-3年)',fmt:v=>fmtNum(v,1)},
+    {key:'broker_vol_3_5',label:'券商(3-5年)',fmt:v=>fmtNum(v,1)},
+    {key:'broker_vol_5_7',label:'券商(5-7年)',fmt:v=>fmtNum(v,1)},
+    {key:'broker_vol_7plus',label:'券商(7年以上)',fmt:v=>fmtNum(v,1)},
+    {key:'insurance_vol_total',label:'保险总成交量',fmt:v=>fmtNum(v,1)},
+    {key:'insurance_vol_0_1',label:'保险(0-1年)',fmt:v=>fmtNum(v,4)},
+    {key:'insurance_vol_1_3',label:'保险(1-3年)',fmt:v=>fmtNum(v,4)},
+    {key:'insurance_vol_3_5',label:'保险(3-5年)',fmt:v=>fmtNum(v,4)},
+  ], '🏦 机构成交量 — 最近20周数据');
+}
+
+// ===== TURNOVER =====
+let toN = 9999;
+function renderTurnover(n, btn) {
+  toN = n;
+  if (btn) { btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
+  const d = DATA4.slice(-n);
+  const dates = d.map(r=>r.date);
+
+  // Zoom slider: needs extra bottom space, so we push legend to top
+  const gridZoom = { left:70, right:25, top:40, bottom:68 };
+  const gridZoomDual = { left:70, right:70, top:40, bottom:68 };
+  const zoom = [{type:'slider',bottom:2,height:20,borderColor:'#2a4a5a',backgroundColor:'#162432',textStyle:{color:'#78909c'},dataBackground:{lineStyle:{color:'#4fc3f7'},areaStyle:{color:'rgba(79,195,247,0.1)'}},selectedDataBackground:{lineStyle:{color:'#4fc3f7'},areaStyle:{color:'rgba(79,195,247,0.2)'}}}];
+
+  const c1 = initChart('c-to-rate');
+  if(c1) c1.setOption({
+    tooltip:{trigger:'axis'}, legend:legendTop, grid:gridZoom,
+    xAxis:{type:'category',data:dates,...xStyle},
+    yAxis:{type:'value',axisLabel:{color:'#78909c',formatter:v=>(v*100).toFixed(2)+'%'},splitLine:{lineStyle:{color:'#1e3a4a'}}},
+    dataZoom:zoom,
+    series:[{
+      name:'换手率',type:'line',data:d.map(r=>r.turnover_rate),itemStyle:{color:C.blue},lineStyle:{width:1.5},symbol:'none',smooth:true,
+      areaStyle:{color:'rgba(79,195,247,0.12)'},
+      markLine:{data:[{type:'average',name:'均值',lineStyle:{color:'#ffa726',type:'dashed'}}],silent:true}
+    }]
+  });
+
+  const c2 = initChart('c-to-broker');
+  if(c2) c2.setOption({
+    tooltip:{trigger:'axis'}, legend:legendTop, grid:gridZoom,
+    xAxis:{type:'category',data:dates,...xStyle},
+    yAxis:{type:'value',axisLabel:{color:'#78909c',formatter:v=>(v*100).toFixed(2)+'%'},splitLine:{lineStyle:{color:'#1e3a4a'}}},
+    dataZoom:zoom,
+    series:[{
+      name:'经纪商换手率',type:'line',data:d.map(r=>r.broker_turnover_rate),itemStyle:{color:C.green},lineStyle:{width:1.5},symbol:'none',smooth:true,
+      areaStyle:{color:'rgba(102,187,106,0.12)'},
+      markLine:{data:[{type:'average',name:'均值',lineStyle:{color:'#ffa726',type:'dashed'}}],silent:true}
+    }]
+  });
+
+  const c3 = initChart('c-to-compare');
+  if(c3) c3.setOption({
+    tooltip:{trigger:'axis'}, legend:legendTop, grid:gridZoomDual,
+    xAxis:{type:'category',data:dates,...xStyle},
+    yAxis:[
+      {type:'value',axisLabel:{color:'#78909c',formatter:v=>(v*100).toFixed(2)+'%'},splitLine:{lineStyle:{color:'#1e3a4a'}}},
+      {type:'value',axisLabel:{color:'#78909c',formatter:v=>(v*100).toFixed(2)+'%'},splitLine:{show:false}},
+    ],
+    dataZoom:zoom,
+    series:[
+      {name:'换手率',type:'line',data:d.map(r=>r.turnover_rate),itemStyle:{color:C.blue},lineStyle:{width:1.5},symbol:'none',smooth:true},
+      {name:'经纪商换手率',type:'line',data:d.map(r=>r.broker_turnover_rate),itemStyle:{color:C.green},lineStyle:{width:1.5},symbol:'none',smooth:true},
+      {name:'差值',type:'line',yAxisIndex:1,data:d.map(r=>r.turnover_rate-r.broker_turnover_rate),itemStyle:{color:C.orange},lineStyle:{width:1,type:'dashed'},symbol:'none',smooth:true},
+    ]
+  });
+
+  // Data table
+  buildTable('to-table-wrap', DATA4, [
+    {key:'date',label:'日期'},
+    {key:'turnover_rate',label:'换手率',fmt:fmtPct},
+    {key:'broker_turnover_rate',label:'经纪商换手率',fmt:fmtPct},
+  ], '🔄 换手率 — 最近20日数据');
+}
+
+// ===== RENDER CURRENT TAB =====
+function renderTab(name) {
+  if (name==='overview') { renderOverview(); }
+  else if (name==='tkn') { renderTKN(tknN); }
+  else if (name==='institution') { renderInst(instN); }
+  else if (name==='turnover') { renderTurnover(toN); }
+  resizeAll();
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded', function() {
+  renderKPI();
+  renderOverview();
+  renderTKN(9999);
+  renderInst(9999);
+  renderTurnover(9999);
+  resizeAll();
+});
+</script>
+</body>
+</html>
